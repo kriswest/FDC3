@@ -42,13 +42,13 @@ Date of withdrawal:
 
 This section includes any Exclusion Notices made against a Draft Deliverable or Approved Deliverable as set forth in the Community Specification Development License.  Each Exclusion Notice must include the following information:
 
--	Name of party making the Exclusion Notice:
+- Name of party making the Exclusion Notice:
 
--	Name of patent owner:
+- Name of patent owner:
 
--	Specification:
+- Specification:
 
--	Version number:
+- Version number:
 
 **For issued patents and published patent applications:**
 
