@@ -11,7 +11,7 @@
 [![Slack](https://img.shields.io/badge/slack-@finos/fdc3-green.svg?logo=slack)](https://finos-lf.slack.com/messages/fdc3/)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6579/badge)](https://bestpractices.coreinfrastructure.org/projects/6579)
 
-## What Is It?
+## What Is It? Spoon!
 
 [FDC3](https://fdc3.finos.org) is an open standard for applications on financial desktop to interoperate and exchange data with each other.  
 
