@@ -1,4 +1,4 @@
-# FDC3 - Financial Desktop Connectivity and Collaboration Consortium
+# FDC3 - Test
 
 Change for Git proxy testing - again
 
