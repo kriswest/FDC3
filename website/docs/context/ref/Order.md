@@ -12,7 +12,7 @@ This type currently only defines a required `id` field, which should provide a r
 
 ## Schema
 
-[https://fdc3.finos.org/schemas/next/context/order.schema.json](https://fdc3.finos.org/schemas/next/context/order.schema.json) ([github](https://github.com/finos/FDC3/tree/main/packages/fdc3-context/schemas/context/order.schema.json))
+[https://fdc3.finos.org/schemas/next/context/order.schema.json](pathname:///schemas/next/context/order.schema.json) ([github](https://github.com/finos/FDC3/tree/main/packages/fdc3-context/schemas/context/order.schema.json))
 
 ## Type
 
@@ -63,12 +63,22 @@ Optional additional details about the order, which may include a product element
 
 </details>
 
+<details>
+  <summary><code>notes</code></summary>
+
+**type**: `string`
+
+Additional notes or comments about the order.
+
+</details>
+
 ## Examples
 
 ```json
 {
   "type": "fdc3.order",
   "name": "...",
+  "notes": "...",
   "id": {
     "myOMS": "12345"
   },

@@ -36,6 +36,8 @@ interface Channel {
   broadcast(context: Context): Promise<void>;
   getCurrentContext(contextType?: string): Promise<Context|null>;
   addContextListener(contextType: string | null, handler: ContextHandler): Promise<Listener>;
+  clearContext(contextType?: string): Promise<void>;
+  addEventListener(type: string  | null, handler: EventHandler): Promise<Listener>;
   
   //deprecated functions
   /**
@@ -57,7 +59,39 @@ interface IChannel: IIntentResult
     Task Broadcast(IContext context);
     Task<IContext?> GetCurrentContext(string? contextType);
     Task<IListener> AddContextListener<T>(string? contextType, ContextHandler<T> handler) where T : IContext;
+    Task ClearContext(string? contextType);
+    Task<IListener> AddEventListener(string? eventType, Fdc3EventHandler handler);
 }
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+@experimental
+type IChannel interface {
+    Broadcast(context Context) <-chan Result[any]
+    GetCurrentContext(contextType string) <-chan Result[IContext]
+    AddContextListener(contextType string, handler ContextHandler) <-chan Result[Listener]
+}
+
+@experimental
+type Channel struct {
+	Id              string        `json:"id"`
+	Type            ChannelType      `json:"type"`
+	DisplayMetadata *DisplayMetadata `json:"displayMetadata"`
+}
+
+@experimental
+type ChannelType string
+
+@experimental
+const (
+	App     ChannelType = "app"
+	Private ChannelType = "private"
+	User    ChannelType = "user"
+	System  ChannelType = "system"
+)
 ```
 
 </TabItem>
@@ -90,6 +124,13 @@ string Id { get; }
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+Id string
+```
+
+</TabItem>
 </Tabs>
 
 Uniquely identifies the channel. It is either assigned by the desktop agent (User Channel) or defined by an application (App Channel).
@@ -118,6 +159,18 @@ public enum ChannelType
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type ChannelType string
+
+const (
+	App     ChannelType = "app"
+	System  ChannelType = "system"
+	Private ChannelType = "private"
+)
+```
+</TabItem>
 </Tabs>
 
 Can be _user_,  _app_ or _private_.
@@ -138,6 +191,12 @@ public readonly displayMetadata?: DisplayMetadata;
 IDisplayMetadata? DisplayMetadata { get; }
 ```
 
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+DisplayMetadata *DisplayMetadata
+```
 </TabItem>
 </Tabs>
 
@@ -166,6 +225,15 @@ Task<IListener> AddContextListener<T>(string? contextType, ContextHandler<T> han
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (ch *Channel) AddContextListener(contextType string, handler ContextHandler) <-chan Result[Listener]  { 
+  // Implementation here
+}
+```
+
+</TabItem>
 </Tabs>
 
 Adds a listener for incoming contexts of the specified _context type_ whenever a broadcast happens on this channel.
@@ -173,6 +241,8 @@ Adds a listener for incoming contexts of the specified _context type_ whenever a
 If, when this function is called, the channel already contains context that would be passed to the listener it is NOT called or passed this context automatically (this behavior differs from that of the [`fdc3.addContextListener`](DesktopAgent#addcontextlistener) function). Apps wishing to access to the current context of the channel should instead call the [`getCurrentContext(contextType)`](#getcurrentcontext) function.
 
 Optional metadata about each context message received, including the app that originated the message, SHOULD be provided by the desktop agent implementation.
+
+Adding multiple context listeners on the same or overlapping types (i.e. specific `contextType` and `null` type) MUST be allowed, and MUST trigger all ContextHandlers when a relevant context type is broadcast on the current channel. 
 
 **Examples:**
 
@@ -211,6 +281,26 @@ var listener = await channel.AddContextListener<IContext>(null, (context, metada
 
 // later
 listener.Unsubscribe();
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+listenerResult := <-channel.AddContextListener("", func(contextInt IContext, contextMetadata *ContextMetadata) {
+        if context, ok := contextInt.(Context); ok {
+			if context.Type == "fdc3.contact" {
+				// handle the contact 
+			} else if context.Type == "fdc3.instrument" {
+				// handle the instrument 
+			}
+        } 
+	})
+
+// later 
+if listenerResult.Value != nil {
+	listenerResult.Value.Unsubscribe()
+}
 ```
 
 </TabItem>
@@ -253,6 +343,26 @@ instrumentListener.unsubscribe();
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+listenerResultContact := <-channel.AddContextListener("fdc3.contact", func(context IContext, contextMetadata *ContextMetadata) {
+    // handle the contact
+})
+listenerResultInstrument := <-channel.AddContextListener("fdc3.instrument", func(context IContext, contextMetadata *ContextMetadata) {
+    // handle the instrument
+})
+
+// later 
+if listenerResultContact.Value != nil {
+	listenerResultContact.Value.Unsubscribe()
+}
+if listenerResultInstrument.Value != nil {
+	listenerResultInstrument.Value.Unsubscribe()
+}
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -261,6 +371,58 @@ instrumentListener.unsubscribe();
 - [`ContextHandler`](Types#contexthandler)
 - [`broadcast`](#broadcast)
 - [`getCurrentContext`](#getcurrentcontext)
+
+### `addEventListener`
+
+<Tabs groupId="lang">
+<TabItem value="ts" label="TypeScript/JavaScript">
+
+```ts
+addEventListener(type: string  | null, handler: EventHandler): Promise<Listener>;
+```
+
+</TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+Task<IListener> AddEventListener(string? eventType, Fdc3EventHandler handler);
+```
+
+</TabItem>
+</Tabs>
+
+Register a handler for events from the Channel. Whenever the handler function is called it will be passed an event object with details related to the event.
+
+<Tabs groupId="lang">
+<TabItem value="ts" label="TypeScript/JavaScript">
+
+```ts
+// any event type
+const listener: Listener = await myChannel.addEventListener(null, 
+    (event: ApiEvent) => {
+        console.log(`Received event ${event.type}\n\tDetails: ${event.details}`);
+    }
+);
+```
+
+</TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+IChannel myChannel;
+var listener = await myChannel.AddEventListener(null, (event) => {
+    System.Diagnostics.Debug.WriteLine($"Received event ${event.Type}\n\tDetails: ${event.Details}");
+});
+```
+
+</TabItem>
+</Tabs>
+
+**See also:**
+
+- [Events](./Events)
+- [EventHandler](./Events#eventhandler)
+- [ApiEvent](./Events#ApiEvent)
 
 ### `broadcast`
 
@@ -276,6 +438,15 @@ public broadcast(context: Context): Promise<void>;
 
 ```csharp
 Task Broadcast(IContext context);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (channel *Channel) Broadcast(context IContext) <-chan Result[any]  { 
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -328,6 +499,21 @@ catch (Exception ex)
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+result := <-myChannel.Broadcast(types.Context{
+			Type: "fdc3.instrument",
+			Id: map[string]string{
+				"ticker": "AAPL",
+		},
+})
+if result.Err != null {
+    // handle error 
+}
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -350,6 +536,15 @@ public getCurrentContext(contextType?: string): Promise<Context|null>;
 
 ```csharp
 Task<IContext?> GetCurrentContext(string? contextType);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (channel *Channel) GetCurrentContext(contextType string) <-chan Result[Context]  { 
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -393,6 +588,16 @@ catch (Exception ex)
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+result := <-myChannel.GetCurrentContext("")
+if result.Err != null {
+    // handle error 
+}
+```
+
+</TabItem>
 </Tabs>
 
 Specifying a context type:
@@ -423,6 +628,16 @@ catch (Exception ex)
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+result := <-myChannel.GetCurrentContext("fdc3.contact")
+if result.Err != null {
+    // handle error 
+}
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -430,6 +645,99 @@ catch (Exception ex)
 - [`ChannelError`](Errors#channelerror)
 - [`broadcast`](#broadcast)
 - [`addContextListener`](#addcontextlistener)
+
+### `clearContext`
+
+<Tabs groupId="lang">
+<TabItem value="ts" label="TypeScript/JavaScript">
+
+```ts
+public clearContext(contextType?: string): Promise<void>;
+```
+
+</TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+Task ClearContext(string? contextType);
+```
+
+</TabItem>
+</Tabs>
+
+Used to clear the specified context type if provided, otherwise, clear all context types present in the channel. The Desktop Agent MUST update its internal representation of the context in the channel and ensure that subsequent calls to [`getCurrentContext`](#getcurrentcontext) and any new joiners to that channel (through [`joinUserChannel`](DesktopAgent#joinUserChannel) or [`addContextListener`](DesktopAgent#addContextListener)) will not receive anything for either the specified context type or the most recent context until new context has been broadcast to the channel. 
+Desktop Agents MUST also immediately notify the apps that are listening to `contextCleared` event for this channel. If a `contextType` parameter was provided, then the `contextType` field will be set to that type, otherwise, it is omitted. 
+
+
+**Examples:**
+
+Without specifying a context type:
+
+<Tabs groupId="lang">
+<TabItem value="ts" label="TypeScript/JavaScript">
+
+```ts
+try {
+    const context = await channel.clearContext();
+} catch (err: ChannelError) {
+    // handle error
+}
+```
+
+</TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+try
+{
+    var context = await channel.ClearContext();
+}
+catch (Exception ex)
+{
+    // handle error
+}
+```
+
+</TabItem>
+</Tabs>
+
+Specifying a context type:
+
+<Tabs groupId="lang">
+<TabItem value="ts" label="TypeScript/JavaScript">
+
+```ts
+try {
+    const contact = await channel.clearContext('fdc3.contact');
+} catch (err: ChannelError) {
+    // handler error
+}
+```
+
+</TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+try
+{
+    var context = await channel.ClearContext("fdc3.contact");
+}
+catch (Exception ex)
+{
+    // handle error
+}
+```
+
+</TabItem>
+</Tabs>
+
+
+**See also:**
+
+- [`getCurrentContext`](#getcurrentcontext)
+- [`addContextListener`](DesktopAgent#addContextListener)
+- [`joinUserChannel`](DesktopAgent#joinUserChannel)
+- [`addEventListener`](#addeventlistener)
 
 ## Deprecated Functions
 
@@ -447,6 +755,13 @@ public addContextListener(handler: ContextHandler): Promise<Listener>;
 
 </TabItem>
 <TabItem value="dotnet" label=".NET">
+
+```
+Not implemented
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
 
 ```
 Not implemented

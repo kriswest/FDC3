@@ -1,5 +1,5 @@
 import { MessageHandler } from '../BasicFDC3Server';
-import { AppRegistration, InstanceID, ServerContext } from '../ServerContext';
+import { AppRegistration, InstanceID, ServerContext, State } from '../ServerContext';
 import { Directory, DirectoryIntent } from '../directory/DirectoryInterface';
 import { Context } from '@finos/fdc3-context';
 import { AppIntent, ResolveError, AppIdentifier } from '@finos/fdc3-standard';
@@ -275,10 +275,6 @@ export class IntentHandler implements MessageHandler {
     return this.registrations.find(r => r.instanceId == instanceId && r.intentName == intentName) != null;
   }
 
-  async getRunningApps(appId: string, sc: ServerContext<AppRegistration>): Promise<FullAppIdentifier[]> {
-    return (await sc.getConnectedApps()).filter(a => a.appId == appId);
-  }
-
   async startWithPendingIntent(
     arg0: IntentRequest,
     sc: ServerContext<AppRegistration>,
@@ -349,18 +345,14 @@ export class IntentHandler implements MessageHandler {
     sc: ServerContext<AppRegistration>,
     target: AppIdentifier
   ): Promise<void> {
-    // dealing with a specific app, which may or may not be open
-    const runningApps = await this.getRunningApps(target.appId, sc);
-
-    const appIntents = this.createAppIntents(arg0, [...runningApps, { appId: target.appId }]);
+    // in this version of the method, we always open an app as no
+    // specific instance is specified
+    const appIntents = this.createAppIntents(arg0, [{ appId: target.appId }]);
 
     const narrowedAppIntents = await this.narrowIntents(arg0[0].from, appIntents, arg0[0].context, sc);
 
     if (narrowedAppIntents.length == 1) {
-      if (narrowedAppIntents[0].apps.length == 2 && narrowedAppIntents[0].apps[0].instanceId) {
-        // single running instance
-        return this.raiseIntentRequestToSpecificInstance(arg0, sc, runningApps[0]);
-      } else if (narrowedAppIntents[0].apps.length == 1) {
+      if (narrowedAppIntents[0].apps.length == 1) {
         // no running instance, single app
         const appRecords = this.directory.retrieveAppsById(target.appId);
         if (appRecords.length >= 1) {
@@ -369,43 +361,11 @@ export class IntentHandler implements MessageHandler {
             intent: narrowedAppIntents[0].intent.name,
           };
           return this.startWithPendingIntent(ir, sc, target);
-        } else {
-          // app doesn't exist
-          return errorResponseId(
-            sc,
-            arg0[0].requestUuid,
-            arg0[0].from,
-            ResolveError.TargetAppUnavailable,
-            arg0[0].type
-          );
         }
       }
     }
-
-    // need to use the resolver to choose a running app instance
-
-    if (arg0[0].type == 'raiseIntentResponse') {
-      return successResponseId(
-        sc,
-        arg0[0].requestUuid,
-        arg0[0].from,
-        {
-          appIntent: narrowedAppIntents[0],
-        },
-        arg0[0].type
-      );
-    } else {
-      // raise intent for context
-      return successResponseId(
-        sc,
-        arg0[0].requestUuid,
-        arg0[0].from,
-        {
-          appIntents: narrowedAppIntents,
-        },
-        arg0[0].type
-      );
-    }
+    // app doesn't exist
+    return errorResponseId(sc, arg0[0].requestUuid, arg0[0].from, ResolveError.TargetAppUnavailable, arg0[0].type);
   }
 
   oneAppOnly(appIntent: AppIntent): boolean {
@@ -417,11 +377,23 @@ export class IntentHandler implements MessageHandler {
   async raiseIntentToAnyApp(arg0: IntentRequest[], sc: ServerContext<AppRegistration>): Promise<void> {
     const connectedApps = await sc.getConnectedApps();
     const matchingIntents = arg0.flatMap(i => this.directory.retrieveIntents(i.context.type, i.intent, undefined));
-    const uniqueIntentNames = matchingIntents.map(i => i.intentName).filter((v, i, a) => a.indexOf(v) === i);
+    const matchingRegistrations = arg0.flatMap(i => this.registrations.filter(r => r.intentName == i.intent));
+    const uniqueIntentNames = [
+      ...matchingIntents.map(i => i.intentName),
+      ...matchingRegistrations.map(r => r.intentName),
+    ].filter((v, i, a) => a.indexOf(v) === i);
+
+    const allIntents = this.directory.retrieveAllIntents();
 
     const appIntents: AppIntent[] = uniqueIntentNames.map(i => {
       const directoryAppsWithIntent = matchingIntents.filter(mi => mi.intentName == i).map(mi => mi.appId);
-      const runningApps = connectedApps.filter(ca => directoryAppsWithIntent.includes(ca.appId));
+      const runningDirectoryApps = connectedApps.filter(ca => directoryAppsWithIntent.includes(ca.appId));
+      const appRegistrations = matchingRegistrations
+        .filter(registration => registration.intentName === i) // filter registrations for the current intent
+        .map(listener => ({ appId: listener.appId, instanceId: listener.instanceId, state: State.Connected }))
+        .filter(appRegistration => allIntents.every(intent => intent.appId !== appRegistration.appId)); // filter out apps that have intents registered in the directory
+
+      const runningApps: AppRegistration[] = [...runningDirectoryApps, ...appRegistrations];
 
       return {
         intent: {

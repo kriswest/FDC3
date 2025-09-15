@@ -11,7 +11,6 @@ In addition to intent and context events, the FDC3 API and PrivateChannel API ma
 
 Type defining a basic event object that may be emitted by an FDC3 API interface such as DesktopAgent or PrivateChannel. There are more specific event types defined for each interface.
 
-
 <Tabs groupId="lang">
 <TabItem value="ts" label="TypeScript/JavaScript">
 
@@ -26,6 +25,16 @@ interface ApiEvent {
 
 ```
 Not implemented, as ApiEvent and Fdc3Event definitions are the same, given .NET can not restrict on a string enum. Use IFdc3Event instead
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type ApiEvent struct {
+  Type string 
+  Details any
+}
 ```
 
 </TabItem>
@@ -52,6 +61,13 @@ public delegate void Fdc3EventHandler(IFdc3Event fdc3Event);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type EventHandler func(ApiEvent)
+```
+
+</TabItem>
 </Tabs>
 
 Describes a callback that handles non-context and non-intent events. Provides the details of the event.
@@ -70,7 +86,7 @@ Used when attaching listeners to events.
 <TabItem value="ts" label="TypeScript/JavaScript">
 
 ```ts
-type FDC3EventTypes = "userChannelChanged";
+type FDC3EventTypes = "userChannelChanged" | "contextCleared";
 ```
 </TabItem>
 <TabItem value="dotnet" label=".NET">
@@ -79,7 +95,19 @@ type FDC3EventTypes = "userChannelChanged";
 public static class Fdc3EventType
 {
     public const string UserChannelChanged = "userChannelChanged";
+    public const string ContextCleared = "contextCleared";
 }
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type FDC3EventTypes string
+
+const (
+	UserChannelChanged     FDC3EventTypes = "userChannelChanged"
+)
 ```
 
 </TabItem>
@@ -122,6 +150,16 @@ public class Fdc3Event : IFdc3Event
         this.Type = type ?? throw new ArgumentNullException(nameof(type));
         this.Details = details;
     }
+}
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type FDC3Event struct {
+  ApiEvent
+  Type FDC3EventTypes
 }
 ```
 
@@ -178,12 +216,74 @@ public class Fdc3ChannelChangedEvent : Fdc3Event
 ```
 
 </TabItem>
-</Tabs>
+<TabItem value="golang" label="Go">
 
+```go
+type FDC3ChannelChangedEvent struct {
+  FDC3Event
+  Details FDC3ChannelChangedEventDetails
+}
+
+type FDC3ChannelChangedEventDetails struct {
+  currentChannelId *string
+}
+```
+
+</TabItem>
+</Tabs>
 
 Type representing the format of `userChannelChanged`  events.
 
 The identity of the channel joined is provided as `details.currentChannelId`, which will be `null` if the app is no longer joined to any channel.
+
+### `FDC3ContextClearedEvent`
+
+<Tabs groupId="lang">
+<TabItem value="ts" label="TypeScript/JavaScript">
+
+```ts
+export interface FDC3ContextClearedEvent extends FDC3Event {
+  readonly type: 'contextCleared';
+  readonly details: {
+    type: string | null;
+  };
+}
+```
+</TabItem>
+<TabItem value="dotnet" label=".NET">
+
+```csharp
+public interface IFdc3ContextClearedEventDetails
+{
+    string? ContextType { get; }
+}
+public class Fdc3ContextClearedEventDetails : IFdc3ContextClearedEventDetails
+{
+    public string? ContextType { get; }
+
+    public Fdc3ContextClearedEventDetails(string? contextType)
+    {
+        this.ContextType = contextType;
+    }
+}
+
+public class Fdc3ContextClearedEvent : Fdc3Event
+{
+    public Fdc3ContextClearedEvent(string? contextType)
+        : base(Fdc3EventType.ContextCleared, new Fdc3ContextClearedEventDetails(contextType))
+    {
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+
+Type representing the format of `contextCleared`  events.
+
+The specific type of context is defined in the contextType field, which can be empty if we are clearing all the contexts on the channel.
+
 
 ## `PrivateChannelEventTypes`
 
@@ -203,6 +303,18 @@ public static class Fdc3PrivateChannelEventType
     public const string Unsubscribe = "unsubscribe";
     public const string Disconnect = "disconnect";
 }
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type PrivateChannelEventTypes string 
+const (
+  AddContextListenerPrivateChannelEventType PrivateChannelEventTypes = "addContextListener"
+  UnsubscribePrivateChannelEventType PrivateChannelEventTypes = "unsubscribe"
+  DisconnectPrivateChannelEventType PrivateChannelEventTypes = "disconnect"
+)
 ```
 
 </TabItem>
@@ -245,8 +357,17 @@ public class Fdc3PrivateChannelEventDetails : IFdc3PrivateChannelEventDetails
 ```
 
 </TabItem>
-</Tabs>
+<TabItem value="golang" label="Go">
 
+```go
+type PrivateChannelEvent struct {
+  ApiEvent
+  Type PrivateChannelEventTypes
+}
+```
+
+</TabItem>
+</Tabs>
 
 Type defining the format of event objects that may be received via a PrivateChannel's `addEventListener` function.
 
@@ -278,6 +399,20 @@ public class Fdc3PrivateChannelAddContextListenerEvent : Fdc3Event
         : base(Fdc3PrivateChannelEventType.AddContextListener, new Fdc3PrivateChannelEventDetails(contextType))
   {
   }
+}
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type PrivateChannelAddContextListenerEvent struct {
+  PrivateChannelEvent
+  Details PrivateChannelAddContextListenerEventDetails
+}
+
+type PrivateChannelAddContextListenerEventDetails struct {
+  contextType *string
 }
 ```
 
@@ -315,6 +450,20 @@ public class Fdc3PrivateChannelUnsubscribeListenerEvent : Fdc3Event
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type PrivateChannelUnsubscribeEvent struct {
+  PrivateChannelEvent
+  Details PrivateChannelUnsubscribeEventDetails
+}
+
+type PrivateChannelUnsubscribeEventDetails struct {
+  contextType *string
+}
+```
+
+</TabItem>
 </Tabs>
 
 Type defining the format of events representing a context listener removed from the channel (`Listener.unsubscribe()`). Desktop Agents MUST call this when `disconnect()` is called by the other party, for each listener that they had added.
@@ -342,6 +491,15 @@ public class Fdc3PrivateChanneDisconnectEvent : Fdc3Event
         : base(Fdc3PrivateChannelEventType.Disconnect)
     {
     }
+}
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+type PrivateChannelDisconnectEvent struct {
+  PrivateChannelEvent
 }
 ```
 

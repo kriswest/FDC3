@@ -14,7 +14,7 @@ The Product schema does not explicitly include identifiers in the id section, as
 
 ## Schema
 
-[https://fdc3.finos.org/schemas/next/context/product.schema.json](https://fdc3.finos.org/schemas/next/context/product.schema.json) ([github](https://github.com/finos/FDC3/tree/main/packages/fdc3-context/schemas/context/product.schema.json))
+[https://fdc3.finos.org/schemas/next/context/product.schema.json](pathname:///schemas/next/context/product.schema.json) ([github](https://github.com/finos/FDC3/tree/main/packages/fdc3-context/schemas/context/product.schema.json))
 
 ## Type
 
@@ -56,11 +56,21 @@ A financial instrument that relates to the definition of this product
 
 </details>
 
+<details>
+  <summary><code>notes</code></summary>
+
+**type**: `string`
+
+Additional notes or comments about the product.
+
+</details>
+
 ## Example
 
 ```json
 {
   "type": "fdc3.product",
+  "notes": "...",
   "id": {
     "productId": "ABC123"
   },

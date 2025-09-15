@@ -104,6 +104,54 @@ interface IDesktopAgent
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+@experimental
+type Result[T any] struct {
+	Value *T
+	Err   error
+}
+@experimental
+type DesktopAgent struct {}
+
+@experimental
+type IDesktopAgent interface {
+    // Apps
+    Open(appIdentifier AppIdentifier, context *IContext) <-chan Result[AppIdentifier]
+    FindInstances(appIdentifier AppIdentifier) <-chan Result[[]AppIdentifier]
+    GetAppMetadata(appIdentifier AppIdentifier) <-chan Result[AppIdentifier]
+
+    // Context
+    Broadcast(context IContext) <-chan Result[any]
+    AddContextListener(contextType string, handler ContextHandler) <-chan Result[Listener]
+
+    // Intents
+    FindIntent(intent string, context *IContext, resultType *string) <-chan Result[AppIntent]
+    FindIntentsByContext(context IContext, resultType *string) <-chan Result[[]AppIntent]
+    RaiseIntent(intent string, context IContext, appIdentifier *AppIdentifier) <-chan Result[IntentResolution]
+    RaiseIntentForContext(context IContext, appIdentifier *AppIdentifier) <-chan Result[IntentResolution]
+    AddIntentListener(intent string, handler IntentHandler) <-chan Result[Listener]
+
+    // Channels
+    GetOrCreateChannel(channelId string) <-chan Result[Channel]
+    CreatePrivateChannel() <-chan Result[PrivateChannel]
+    GetUserChannels() <-chan Result[[]Channel]
+
+    // OPTIONAL channel management functions
+    JoinUserChannel(channelId string) <-chan Result[any]
+    GetCurrentChannel() <-chan Result[Channel]
+    LeaveCurrentChannel() <-chan Result[any]
+
+    // non-context events 
+    AddEventListener(type *FDC3EventTypes, handler EventHandler) <-Result[Listener];
+
+    //implementation info
+    GetInfo() <-chan Result[ImplementationMetadata]
+}
+```
+
+</TabItem>
 </Tabs>
 
 ## Functions
@@ -125,6 +173,15 @@ Task<IListener> AddContextListener<T>(string? contextType, ContextHandler<T> han
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) AddContextListener(contextType string, handler ContextHandler) <-chan Result[Listener] { 
+  // Implementation here
+}
+```
+
+</TabItem>
 </Tabs>
 
 Adds a listener for incoming context broadcasts from the Desktop Agent (via a User channel or [`fdc3.open`](#open) API call). If the consumer is only interested in a context of a particular type, they can specify that type. If the consumer is able to receive context of any type or will inspect types received, then they can pass `null` as the `contextType` parameter to receive all context types.
@@ -134,6 +191,8 @@ Context broadcasts are primarily received from apps that are joined to the same 
 Context may also be received via this listener if the application was launched via a call to  [`fdc3.open`](#open), where context was passed as an argument. In order to receive this, applications SHOULD add their context listener as quickly as possible after launch, or an error MAY be returned to the caller and the context may not be delivered. The exact timeout used is set by the Desktop Agent implementation, but MUST be at least 15 seconds.
 
 Optional metadata about each context message received, including the app that originated the message, SHOULD be provided by the Desktop Agent implementation.
+
+Adding multiple context listeners on the same or overlapping types (i.e. specific `contextType` and `null` type) MUST be allowed, and MUST trigger all ContextHandlers when a relevant context type is broadcast on the current user channel. Please note, that this behavior differs from [`fdc3.addIntentListener`](#addintentlistener) call; refer to the relevant documentation for more details. 
 
 **Examples:**
 
@@ -172,6 +231,26 @@ var contactListener = await _desktopAgent.AddContextListener<Contact>("fdc3.cont
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+// any context
+listenerResult := <-desktopAgent.AddContextListener("", func(context IContext, contextMetadata *ContextMetadata) { ... })
+
+// listener for a specific type
+listenerResult := <-desktopAgent.AddContextListener("fdc3.contact", func(context IContext, contextMetadata *ContextMetadata) { ... })
+
+// listener that logs metadata for the message of a specific type
+listenerResult := <-desktopAgent.AddContextListener("fdc3.contact", func(context IContext, contextMetadata *ContextMetadata) {
+  if contextMetadata != nil {
+    log.Printf("Received context message\nContext: %v\nOriginating app: %v", context, contextMetadata.Source)
+} else {
+    log.Printf("Received context message\nContext: %v", context)
+}
+})
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -194,6 +273,15 @@ addEventListener(type: FDC3EventTypes  | null, handler: EventHandler): Promise<L
 
 ```csharp
 Task<IListener> AddEventListener(string? eventType, Fdc3EventHandler handler);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) AddEventListener(type *FDC3EventTypes, handler EventHandler) <-Result[Listener]  { 
+  // Implmentation here
+}
 ```
 
 </TabItem>
@@ -256,6 +344,15 @@ Task<IListener> AddIntentListener<T>(string intent, IntentHandler<T> handler) wh
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) AddIntentListener(intent string, handler IntentHandler) <-chan Result[Listener]  { 
+  // Implementation here
+}
+```
+
+</TabItem>
 </Tabs>
 
 Adds a listener for incoming intents raised by other applications, via calls to [`fdc3.raiseIntent`](#raiseintent) or [`fdc3.raiseIntentForContext`](#raiseintentforcontext). If the application is intended to be launched to resolve raised intents, it SHOULD add its intent listeners as quickly as possible after launch or an error MAY be returned to the caller and the intent and context may not be delivered. The exact timeout used is set by the Desktop Agent implementation, but MUST be at least 15 seconds.
@@ -271,6 +368,8 @@ The Desktop Agent MUST reject the promise returned by the `getResult()` function
 The [`PrivateChannel`](PrivateChannel) type is provided to support synchronization of data transmitted over returned channels, by allowing both parties to listen for events denoting subscription and unsubscription from the returned channel. `PrivateChannels` are only retrievable via raising an intent.
 
 Optional metadata about each intent & context message received, including the app that originated the message, SHOULD be provided by the desktop agent implementation.
+
+ Adding multiple intent listeners on the same type MUST be rejected with the [`ResolveError.IntentListenerConflict`](Errors#resolveerror), unless the previous listener was removed first though [`listener.unsubscribe`](Types#unsubscribe)
 
 **Examples:**
 
@@ -338,6 +437,34 @@ var listener = await _desktopAgent.AddIntentListener<IContext>("StartChat", (con
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+//Handle a raised intent
+listenerResult := <-desktopAgent.AddIntentListener("StartChat", func(context IContext, contextMetadata *ContextMetadata) { 
+  // start chat has been requested by another application
+})
+
+//Handle a raised intent and log the originating app metadata
+listenerResult := <-desktopAgent.AddIntentListener("StartChat", func(context IContext, contextMetadata *ContextMetadata) { 
+  if contextMetadata != nil {
+    log.Printf("Received intent StartChat\nContext: %v\nOriginating app: %v", context, contextMetadata.Source)
+  } else {
+    log.Printf("Received intent StartChat\nContext: %v", context)
+}
+})
+
+// listener that logs metadata for the message of a specific type
+listenerResult := <-desktopAgent.AddIntentListener("fdc3.contact", func(context IContext, contextMetadata *ContextMetadata) {
+  if contextMetadata != nil {
+    log.Printf("Received context message\nContext: %v\nOriginating app: %v", context, contextMetadata.Source)
+} else {
+    log.Printf("Received context message\nContext: %v", context)
+}
+})
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -347,6 +474,7 @@ var listener = await _desktopAgent.AddIntentListener<IContext>("StartChat", (con
 - [`Listener`](Types#listener)
 - [`Context`](Types#context)
 - [`IntentHandler`](Types#intenthandler)
+- [`ResolveError`](Errors#resolveerror)
 
 ### `broadcast`
 
@@ -362,6 +490,15 @@ broadcast(context: Context): Promise<void>;
 
 ```csharp
 Task Broadcast(IContext context);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) Broadcast(context IContext) <-chan Result[any]  { 
+  // Implmentation here
+}
 ```
 
 </TabItem>
@@ -406,6 +543,19 @@ _desktopAgent.Broadcast(instrument);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+context := types.Context{
+    Type: "fdc3.instrument",
+    Id: map[string]string{
+      "ticker": "AAPL",
+    },
+  }
+desktopAgent.Broadcast(context)
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -426,6 +576,15 @@ createPrivateChannel(): Promise<PrivateChannel>;
 
 ```csharp
 Task<IPrivateChannel> CreatePrivateChannel();
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) CreatePrivateChannel() <-chan Result[PrivateChannel] {
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -506,6 +665,23 @@ _desktopAgent.AddIntentListener<Instrument>("QuoteStream", async (context, metad
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+desktopAgent.AddIntentListener("fdc3.contact", func(context IContext, contextMetadata *ContextMetadata) {
+  channelResult := <-desktopAgent.CreatePrivateChannel()
+  symbol := context.Id["ticker"]
+
+  if channelResult.Err != nil {
+    return 
+  }
+  channel := channelResult.Value
+  channel.OnAddContextListener
+})
+
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -531,11 +707,21 @@ Task<IEnumerable<IAppIdentifier>> FindInstances(IAppIdentifier app);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) FindInstances(appIdentifier AppIdentifier) <-chan Result[[]AppIdentifier] {
+  // Implementation here
+}
+
+```
+
+</TabItem>
 </Tabs>
 
 Find all the available instances for a particular application.
 
-If the application is not known to the agent, the returned promise should be rejected with the `ResolverError.NoAppsFound` error message. However, if the application is known but there are no instances of the specified app the returned promise should resolve to an empty array.
+If the application is not known to the agent, the returned promise should be rejected with the `ResolveError.NoAppsFound` error message. However, if the application is known but there are no instances of the specified app the returned promise should resolve to an empty array.
 
 If the request fails for another reason, the promise MUST be rejected with an `Error` Object with a `message` chosen from the [`ResolveError`](Errors#resolveerror) enumeration, or (if connected to a Desktop Agent Bridge) the [`BridgingError`](Errors#bridgingerror) enumeration.
 
@@ -564,6 +750,20 @@ var resolution = await _desktopAgent.RaiseIntent("ViewInstrument", context, inst
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+// Retrieve a list of instances of an application
+findInstancesResult := <-desktopAgent.FindInstances(AppIdentifier{AppId: "MyAppId"})
+if findInstancesResult.Err != nil || len(findInstancesResult.Value) == 0 {
+  // handle error
+}
+
+// Target a raised intent at a specific instance
+resolutionResult := <-desktopAgent.RaiseIntent("ViewInstrument", context, findInstancesResult.Value[0])
+```
+
+</TabItem>
 </Tabs>
 
 ### `findIntent`
@@ -580,6 +780,16 @@ findIntent(intent: string, context?: Context, resultType?: string): Promise<AppI
 
 ```csharp
 Task<IAppIntent> FindIntent(string intent, IContext? context = null, string? resultType = null);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) FindIntent(intent string, context *IContext, resultType *string) <-chan Result[AppIntent] {
+  // Implmentation here
+}
+
 ```
 
 </TabItem>
@@ -641,6 +851,19 @@ await _desktopAgent.RaiseIntent(appIntent.Intent.Name, context, appIntent.Apps.F
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+findIntentResult := <-desktopAgent.FindIntent("StartChat", nil, nil)
+if findIntentResult.Err != nil {
+  // handle error
+}
+
+// raise the intent against a particular app
+<-desktopAgent.RaiseIntent(findIntentResult.Value.Intent.Name, context, findInstancesResult.Value.Apps[0])
+```
+
+</TabItem>
 </Tabs>
 
 An optional input context object and/or `resultType` argument may be specified, which the resolver MUST use to filter the returned applications such that each supports the specified input and result types.
@@ -690,7 +913,34 @@ var appIntent = await _desktopAgent.FindIntent("ViewContact", "fdc3.ContactList"
 //     Apps: { AppId: "MyCRM", ResultType: "fdc3.ContactList"}]
 // }
 
-var appIntent = await _desktopAgent.fFindIntent("QuoteStream", instrument, "channel<fdc3.Quote>");
+var appIntent = await _desktopAgent.FindIntent("QuoteStream", instrument, "channel<fdc3.Quote>");
+// returns only apps that return a channel which will receive the specified input and result types:
+// {
+//     Intent: { Name: "QuoteStream" },
+//     Apps: { AppId: "MyOMS", ResultType: "channel<fdc3.Quote>"}]
+// }
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+findIntentResult := <-desktopAgent.FindIntent("StartChat", &contact, nil)
+// returns only apps that support the type of the specified input context:
+// {
+//     Intent: { Name: "StartChat" },
+//     Apps: { Name: "Symphony" }]
+// }
+
+resultType := "fdc3.ContactList"
+findIntentResult := <-desktopAgent.FindIntent("ViewContact", &nil, &resultType)
+// returns only apps that return the specified result type:
+// {
+//     Intent: { Name: "ViewContact" },
+//     Apps: { AppId: "MyCRM", ResultType: "fdc3.ContactList"}]
+// }
+
+findIntentResult := <-desktopAgent.FindIntent("QuoteStream", &instrument, "channel<fdc3.Quote>");
 // returns only apps that return a channel which will receive the specified input and result types:
 // {
 //     Intent: { Name: "QuoteStream" },
@@ -719,6 +969,16 @@ findIntentsByContext(context: Context, resultType?: string): Promise<Array<AppIn
 
 ```csharp
 Task<IEnumerable<IAppIntent>> FindIntentsByContext(IContext context, string? resultType = null);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) FindIntentsByContext(context IContext, resultType *string) <-chan Result[[]AppIntent] {
+  // Implmentation here
+}
+
 ```
 
 </TabItem>
@@ -773,6 +1033,13 @@ var appIntents = await _desktopAgent.FindIntentsByContext(context);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+findIntentResult := <-desktopAgent.FindIntentsByContext(context, nil)
+```
+
+</TabItem>
 </Tabs>
 
 or I look for only intents that are resolved by apps returning a particular result type
@@ -820,6 +1087,30 @@ await _desktopAgent.RaiseIntent(startChat.Intent.Name, context, selectedApp);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+resultType := "fdc3.ContactList"
+findIntentResult := <-desktopAgent.FindIntentsByContext(context, &resultType)
+// returns for example:
+// [{
+//     Intent: { Name: "ViewContact" },
+//     Apps: [{ AppId: "Symphony" }, { AppId: "MyCRM", ResultType: "fdc3.ContactList"}]
+// }];
+if findIntentResult.Err != nil || len(findIntentResult.Value) == 0 {
+  // handle error or no results
+}
+// select a particular intent to raise
+startChat := findIntentResult.Value[0]
+
+// target a particular app or instance
+selectedApp := startChat.Apps[0]
+
+// raise the intent, passing the given context, targeting the app
+<-desktopAgent.RaiseIntent(startChat.Intent.Name, context, selectedApp)
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -841,6 +1132,16 @@ getAppMetadata(app: AppIdentifier): Promise<AppMetadata>;
 
 ```csharp
 Task<IAppMetadata> GetAppMetadata(IAppIdentifier app);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) GetAppMetadata(appIdentifier AppIdentifier) <-chan Result[AppIdentifier] {
+  // Implementation here
+}
+
 ```
 
 </TabItem>
@@ -869,6 +1170,14 @@ var appMetadata = await _desktopAgent.GetAppMetadata(appIdentifier);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+appIdentifier := AppIdentifier{AppId: "MyAppId@my.appd.com"}
+appMetadataResult := <-desktopAgent.GetAppMetadata(appIdentifier)
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -890,6 +1199,16 @@ getCurrentChannel() : Promise<Channel | null>;
 
 ```csharp
 Task<IChannel?> GetCurrentChannel();
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) GetCurrentChannel() <-chan Result[Channel] {
+  // Implementation here
+}
+
 ```
 
 </TabItem>
@@ -918,6 +1237,13 @@ var current = await _desktopAgent.GetCurrentChannel();
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+currentResult := <-desktopAgent.GetCurrentChannel()
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -938,6 +1264,16 @@ getInfo(): Promise<ImplementationMetadata>;
 
 ```csharp
 Task<IImplementationMetadata> GetInfo();
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) GetInfo() <-chan Result[ImplementationMetadata] {
+  // Implementation here
+}
+
 ```
 
 </TabItem>
@@ -970,6 +1306,16 @@ var version = (await _desktopAgent.GetInfo()).Fdc3Version;
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+infoResult := <-desktopAgent.GetInfo()
+if infoResult.Value != nil {
+  version := infoResult.Fdc3Version
+}
+```
+
+</TabItem>
 </Tabs>
 
 The `ImplementationMetadata` object returned also includes the metadata for the calling application, according to the Desktop Agent. This allows the application to retrieve its own `appId`, `instanceId` and other details, e.g.:
@@ -989,6 +1335,17 @@ let {appId, instanceId} = implementationMetadata.appMetadata;
 var implementationMetadata = await _desktopAgent.GetInfo();
 var appId = implementationMetadata.AppMetadata.AppId;
 var instanceId = implementationMetadata.AppMetadata.InstanceId;
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+implementationMetadataResult := <-desktopAgent.GetInfo()
+if implementationMetadataResult.Value != nil {
+  appId := implementationMetadataResult.AppMetadata.AppId
+  instanceId := implementationMetadataResult.AppMetadata.InstanceId
+}
 ```
 
 </TabItem>
@@ -1013,6 +1370,16 @@ getOrCreateChannel(channelId: string): Promise<Channel>;
 
 ```csharp
 Task<IChannel> GetOrCreateChannel(string channelId);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) GetOrCreateChannel(channelId string) <-chan Result[Channel] {
+  // Implementation here
+}
+
 ```
 
 </TabItem>
@@ -1053,6 +1420,22 @@ catch (Exception ex)
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+myChannelResult := <-desktopAgent.GetOrCreateChannel("myChannel")
+if myChannelResult.Err != nil {
+    //app could not register the channel
+}
+myChannel := myChannelResult.Value
+<-myChannel.AddContextListener("", func(context IContext, metadata *ContextMetadata) {
+    // do something with context
+})
+
+
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -1073,6 +1456,16 @@ getUserChannels() : Promise<Array<Channel>>;
 
 ```csharp
 Task<IEnumerable<IChannel>> GetUserChannels();
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) GetUserChannels() <-chan Result[[]Channel] {
+  // Implementation here
+}
+
 ```
 
 </TabItem>
@@ -1099,6 +1492,18 @@ var redChannel = userChannels.First(c => c.Id == "red");
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+import "slices" // This is for go 1.21+, before that use `golang.org/x/exp/slices` library
+userChannelsResult := <-desktopAgent.GetUserChannels()
+if userChannelsResult.Err != nil {
+  // handle error
+}
+redChannel := slices.IndexFunc(userChannelsResult.Value, func(c Channel) bool { return c.Id == "red" })
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -1119,6 +1524,16 @@ joinUserChannel(channelId: string) : Promise<void>;
 
 ```csharp
 Task JoinUserChannel(string channelId);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) JoinUserChannel(channelId string) <-chan Result[any] {
+  // Implementation here
+}
+
 ```
 
 </TabItem>
@@ -1163,6 +1578,18 @@ _desktopAgent.JoinUserChannel(selectedChannel.Id);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+userChannelsResult := <-desktopAgent.GetUserChannels()
+if userChannelsResult.Err != nil {
+  // handle error
+}
+<-desktopAgent.JoinUserChannel(userChannelsResult.Value.Id)
+
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -1183,6 +1610,15 @@ leaveCurrentChannel() : Promise<void>;
 
 ```csharp
 Task LeaveCurrentChannel();
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) LeaveCurrentChannel() <-chan Result[any] {
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -1224,6 +1660,21 @@ redChannel.AddContextListener(null, channelListener);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+//desktop-agent scope context listener
+listenerResult := <-desktopAgent.AddContextListener("", func(context IContext, contextMetadata *ContextMetadata) { ... })
+
+
+<-desktopAgent.LeaveCurrentChannel()
+//the fdc3Listener will now cease receiving context
+
+//listening on a specific channel though, will continue to work
+<-redChannel.AddContextListener("", channelListener);
+```
+
+</TabItem>
 </Tabs>
 
 ### `open`
@@ -1240,6 +1691,15 @@ open(app: AppIdentifier, context?: Context): Promise<AppIdentifier>;
 
 ```csharp
 Task<IAppIdentifier> Open(IAppIdentifier app, IContext? context = null);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) Open(appIdentifier AppIdentifier, context *IContext) <-chan Result[AppIdentifier] {
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -1284,6 +1744,18 @@ var instanceIdentifier = await _desktopAgent.Open(appIdentifier, context);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+// Open an app without context, using an AppIdentifier object to specify the target
+appIdentifier := AppIdentifier{AppId: "myApp-v1.0.1"}
+instanceIdentifierResult := <-desktopAgent.Open(appIdentifier, nil)
+
+// Open an app with context 
+instanceIdentifierResult := <-desktopAgent.Open(appIdentifier, &context)
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -1307,6 +1779,15 @@ raiseIntent(intent: string, context: Context, app?: AppIdentifier): Promise<Inte
 
 ```csharp
 Task<IIntentResolution> RaiseIntent(string intent, IContext context, IAppIdentifier? app = null);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) RaiseIntent(intent string, context IContext, appIdentifier *AppIdentifier) <-chan Result[IntentResolution] {
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -1385,6 +1866,31 @@ IIntentResolution resolution = await _desktopAgent.RaiseIntent("intentName", con
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+// raise an intent for resolution by the desktop agent
+// a resolver UI may be displayed, or another method of resolving the intent to a
+// target applied, if more than one application can resolve the intent
+<-desktopAgent.RaiseIntent("StartChat", context, nil)
+
+// or find apps to resolve an intent to start a chat with a given contact
+appIntentResult := <-desktopAgent.FindIntent("StartChat", &context, nil);
+if appIntentResult.Err != nil || len(appIntentResult.Vlaue.Apps) == 0 {
+  // handle error or no apps returned
+}
+
+// use the metadata of an app or app instance to describe the target app for the intent
+<-desktopAgent.RaiseIntent("StartChat", context, appIntentResult.Vlaue.Apps[0])
+
+//Raise an intent without a context by using the null context type
+<-desktopAgent.RaiseIntent("StartChat", Context{Type: "fdc3.nothing"}, nil)
+
+//Raise an intent and retrieve a result from the IntentResolution
+resolutionResult := <-desktopAgent.RaiseIntent("intentName", context, nil);
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -1411,6 +1917,15 @@ raiseIntentForContext(context: Context, app?: AppIdentifier): Promise<IntentReso
 
 ```csharp
 Task<IIntentResolution> RaiseIntentForContext(IContext context, IAppIdentifier? app = null);
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+func (desktopAgent *DesktopAgent) RaiseIntentForContext(context IContext, appIdentifier *AppIdentifier) <-chan Result[IntentResolution] {
+  // Implementation here
+}
 ```
 
 </TabItem>
@@ -1452,6 +1967,17 @@ await _desktopAgent.RaiseIntentForContext(context, targetAppIdentifier);
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```go
+// Display a resolver UI for the user to select an intent and application to resolve it
+intentResolutionResult := <-desktopAgent.RaiseIntentForContext(context, nil)
+
+// Resolve against all intents registered by a specific target app for the specified context
+intentResolutionResult := <-desktopAgent.RaiseIntentForContext(context, &targetAppIdentifier)
+```
+
+</TabItem>
 </Tabs>
 
 **See also:**
@@ -1482,6 +2008,13 @@ Not implemented
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```
+Not implemented
+```
+
+</TabItem>
 </Tabs>
 
 Adds a listener for incoming context broadcasts from the Desktop Agent. Provided for backwards compatibility with versions FDC3 standard &lt;2.0.
@@ -1507,6 +2040,13 @@ Not implemented
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```
+Not implemented
+```
+
+</TabItem>
 </Tabs>
 
 Alias to the [`getUserChannels`](#getuserchannels) function provided for backwards compatibility with version 1.1 & 1.2 of the FDC3 standard.
@@ -1527,6 +2067,13 @@ joinChannel(channelId: string) : Promise<void>;
 <TabItem value="dotnet" label=".NET">
 
 ```csharp
+Not implemented
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```
 Not implemented
 ```
 
@@ -1556,6 +2103,13 @@ Not implemented
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```
+Not implemented
+```
+
+</TabItem>
 </Tabs>
 
 Version of `open` that launches an app by name rather than `AppIdentifier`. Provided for backwards compatibility with versions of the FDC3 Standard &lt;2.0.
@@ -1581,6 +2135,13 @@ Not implemented
 ```
 
 </TabItem>
+<TabItem value="golang" label="Go">
+
+```
+Not implemented
+```
+
+</TabItem>
 </Tabs>
 
 Version of `raiseIntent` that targets an app by name rather than `AppIdentifier`. Provided for backwards compatibility with versions of the FDC3 Standard &lt;2.0.
@@ -1602,6 +2163,13 @@ raiseIntentForContext(context: Context, name: string): Promise<IntentResolution>
 <TabItem value="dotnet" label=".NET">
 
 ```csharp
+Not implemented
+```
+
+</TabItem>
+<TabItem value="golang" label="Go">
+
+```
 Not implemented
 ```
 

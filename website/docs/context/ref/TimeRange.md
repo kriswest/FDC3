@@ -27,7 +27,7 @@ Notes:
 
 ## Schema
 
-[https://fdc3.finos.org/schemas/next/context/timeRange.schema.json](https://fdc3.finos.org/schemas/next/context/timeRange.schema.json) ([github](https://github.com/finos/FDC3/tree/main/packages/fdc3-context/schemas/context/timeRange.schema.json))
+[https://fdc3.finos.org/schemas/next/context/timeRange.schema.json](pathname:///schemas/next/context/timeRange.schema.json) ([github](https://github.com/finos/FDC3/tree/main/packages/fdc3-context/schemas/context/timeRange.schema.json))
 
 ## Type
 
@@ -59,7 +59,7 @@ The end time of the range, encoded according to [ISO 8601-1:2019](https://www.is
 {
   "type": "fdc3.timeRange",
   "startTime": "2022-03-30T15:44:44Z",
-  "endTime": "2022-04-30T23:59:59ZS"
+  "endTime": "2022-04-30T23:59:59Z"
 }
 ```
 

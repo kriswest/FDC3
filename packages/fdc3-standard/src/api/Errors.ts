@@ -53,6 +53,9 @@ export enum OpenError {
 
   /** Returned if a timeout occurs before a call to open is resolved for any reason other than the not adding its context listener in time.*/
   ApiTimeout = 'ApiTimeout',
+
+  /** Returned when incorrect arguments are passed to API calls.*/
+  InvalidArguments = 'InvalidArguments',
 }
 
 /** Constants representing the errors that can be encountered when calling the `findIntent`, `findIntentsByContext`, `raiseIntent` or `raiseIntentForContext` methods on the DesktopAgent (`fdc3`). */
@@ -81,11 +84,17 @@ export enum ResolveError {
   /** Returned if a call to one of the `raiseIntent` functions is made with an invalid context argument. Contexts should be Objects with at least a `type` field that has a `string` value.*/
   MalformedContext = 'MalformedContext',
 
+  /** Returned if `fdc3.addIntentListener` is called for a specified intent that the application has already added a listener for and has not subsequently removed it. */
+  IntentListenerConflict = 'IntentListenerConflict',
+  
   /** @experimental Returned if the specified Desktop Agent is not found, via a connected Desktop Agent Bridge.*/
   DesktopAgentNotFound = 'DesktopAgentNotFound',
 
   /** Returned if a timeout occurs before the API call is resolved for any reason other than the resolver timing out (use ResolverTimeout) or an app launched by a raiseIntent function doesn't add its intent listener in time (use IntentDeliveryFailed).*/
   ApiTimeout = 'ApiTimeout',
+
+  /** Returned when incorrect arguments are passed to API calls.*/
+  InvalidArguments = 'InvalidArguments',
 }
 
 export enum ResultError {
@@ -114,6 +123,9 @@ export enum ChannelError {
 
   /** Returned if a timeout occurs before any Channel related API call is resolved.*/
   ApiTimeout = 'ApiTimeout',
+
+  /** Returned when incorrect arguments are passed to API calls.*/
+  InvalidArguments = 'InvalidArguments',
 }
 
 export enum BridgingError {

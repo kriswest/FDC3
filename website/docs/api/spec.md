@@ -115,11 +115,13 @@ An FDC3 Standard compliant Desktop Agent implementation **MUST**:
 - Provide a method of resolving ambiguous intents (i.e. those that might be resolved by multiple applications) or unspecified intents (calls to `raiseIntentForContext` that return multiple options), such as a resolver UI.
   - Intent resolution MUST take into account any specified input or return context types
   - Requests for resolution to apps returning a channel MUST include any apps that are registered as returning a channel with a specific type.
+- Attempt to [resolve both fully-qualified and unqualified `appId` values](#fully-qualified-appids) received in `AppIdentifier` Objects as parameters to API functions against known fully-qualified or unqualified `appId` values, with results returned indicating the `appId` that was matched against the parameter value.
 - Return (JavaScript or platform appropriate) Error Objects with messages from the [`ChannelError`](ref/Errors#channelerror), [`OpenError`](ref/Errors#openerror), [`ResolveError`](ref/Errors#resolveerror) and [`ResultError`](ref/Errors#resulterror) enumerations as appropriate.
 - Provide an ID for each [`PrivateChannel`](ref/PrivateChannel) created via [`createPrivateChannel`](ref/DesktopAgent#createprivatechannel) and prevent them from being retrieved via [`getOrCreateChannel`](ref/DesktopAgent#getorcreatechannel) by ID.
 - Only require app directories that they connect to to have implemented only the minimum requirements specified in the [App Directory API Part](../app-directory/spec) of this Standard.
 - Provide details of whether they implement optional features of the Desktop Agent API in the `optionalFeatures` property of the [`ImplementationMetadata`](ref/Metadata#implementationmetadata) object returned by the [`fdc3.getInfo()`](ref/DesktopAgent#getinfo) function.
 - Allow, by default, at least a 15 second timeout for an application, launched via [`fdc3.open`](../api/ref/DesktopAgent#open), [`fdc3.raiseIntent`](../api/ref/DesktopAgent#raiseintent) or [`fdc3.raiseIntentForContext`](../api/ref/DesktopAgent#raiseintentforcontext) to add any context listener (via [`fdc3.addContextListener`](../api/ref/DesktopAgent#addcontextlistener)) or intent listener (via [`fdc3.addIntentListener`](../api/ref/DesktopAgent#addintentlistener)) necessary to deliver context or intent and context to it on launch. This timeout only applies to listeners needed to receive context on launch; further intent and context listeners not required on launch MAY be added later.
+- For web applications: All public methods of FDC3 interface objects (e.g. `DesktopAgent`, `Channel`, `PrivateChannel`, `IntentResolution`) **MUST** be bound to their respective instances (e.g. using `.bind(this)` in constructors) to support correct behavior when methods are destructured in JavaScript.  See [DesktopAgentProxy implementation](../../FDC3/packages/fdc3-agent-proxy/src/DesktopAgentProxy.ts) for a reference.
 
 An FDC3 Standard compliant Desktop Agent implementation **SHOULD**:
 
@@ -147,6 +149,7 @@ An FDC3 Standard compliant Desktop Agent implementation **MAY**:
   - [`open`](ref/DesktopAgent#open-deprecated) (deprecated version that addresses apps via `name` field)
   - [`raiseIntent`](ref/DesktopAgent#raiseintent-deprecated) (deprecated version that addresses apps via `name` field)
   - [`raiseIntentForContext`](ref/DesktopAgent#raiseintentforcontext-deprecated) (deprecated version that addresses apps via `name` field)
+- Make use of a resolver user interface or other suitable procedure to resolve an ambiguous unqualified `appId` value received as part of an `AppIdentifier` passed as a paremeter to an API function. 
 
 For more details on FDC3 Standards compliance (including the versioning, deprecation and experimental features policies) please see the [FDC3 Compliance page](../fdc3-compliance).
 
@@ -234,6 +237,16 @@ Additional metadata for an application can be retrieved via the [`fdc3.getAppMet
 
 Identifiers for instances of an application may be retrieved via the [`fdc3.findInstances(appIdentifier)`](ref/DesktopAgent#findinstances) function.
 
+#### Fully-Qualified AppIds
+
+As an `appId` used in an [`AppIdentifier`](ref/Types#appidentifier) might be replicated in other App Directories, it may be made globally unique (fully-qualified) by appending the domain name of the app directory that it references, [as described in the App Directory Part of the Standard](../app-directory/overview#application-identifiers). Fully-qualified `appId` values may be used to resolve the location of the app directory record that defines them using the [host resolution procedure](../app-directory/overview#fully-qualified-appid-namespace-syntax-host-resolution) defined in the App Directory Part of the Standard. For example, an `appId` such as `"myApplication"` defined in an App Directory record at `https://appd.example.com/api/appd/v2/apps/myApplication` may be fully qualified as `"myApplication@appd.example.com"`. Desktop Agents MAY be configured with details of applications via either unqualified or fully-qualified appIds.
+
+Wherever an `appId` is used to refer to a specific application as part of an [`AppIdentifier`](ref/Types#appidentifier), either the unqualified or fully-qualified version of the `appId` MAY be used interchangeably. Desktop Agents receiving an [`AppIdentifier`](ref/Types#appidentifier) as input to an API call such as [`open`](./ref/DesktopAgent#open), [`raiseIntent`](./ref/DesktopAgent#raiseintent), [`raiseIntentForContext`](./ref/DesktopAgent#raiseintentforcontext), [`getAppMetadata`](./ref/DesktopAgent#getappmetadata) or [`findInstances`](./ref/DesktopAgent#findinstances) MUST attempt to resolve the `appId` provided against the list of `appId` values that it is aware of by first matching the `appId` as provided. I.e. if a fully qualified id such as `myapp@appd.example.com` was provided attempt to match the whole string to known fully-qualified `appId` values, or if an unqualified `appId` was provided attempt to match it to known unqualified `appId` values.
+
+If no exact match is found then a fully-qualified `appId` provided should be split on `@` character and an attempt made to match the unqualified portion to known unqualified `appIds`, ignoring any known fully-qualified `appId` values that were already matched against. Alternatively, if an unqualified `appId` was provided then the known fully-qualified `appId` values should be split on the `@` character and the unqualified appId matched against their unqualified part.
+
+The matching of an unqualified `appId` value against a set of fully-qualified appIds may result in multiple matches. In such cases, Desktop Agents SHOULD attempt additional resolution via any suitable procedure. For API calls such as [`raiseIntent`](./ref/DesktopAgent#raiseintent) or [`raiseIntentForContext`](./ref/DesktopAgent#raiseintentforcontext) Desktop Agents SHOULD use the same approach as they do for resolving ambiguous intents, for example by displaying an Intent Resolver UI and allowing the user to select the desired application. Alternatively, Desktop Agents MAY apply an alternative procedure such as selecting the first matching `appId` or, in the case of `findInstances`, by returning results for all matching fully-qualified `appId` values. Each of the API calls accepting an [`AppIdentifier`](ref/Types#appidentifier) as input, returns details of the `appId` in its results (i.e. [`AppIdentifier`](ref/Types#appidentifier), [`AppMetadata`](ref/Metadata#appmetadata), [IntentResolution](ref/Metadata#intentresolution)), where the fully-qualified appId matched MUST be used.
+
 ## Raising Intents
 
 Raising an Intent is a method for an application to request functionality from another application and, if desired, defer the discovery and launching of the destination app to the Desktop Agent.
@@ -244,7 +257,7 @@ When raising an intent a specific context is provided as input. The type of the 
 
 A context type may also be associated with multiple intents. For example, an `fdc3.instrument` could be associated with `ViewChart`, `ViewNews`, `ViewAnalysis` or other intents.
 
-To raise an intent without a context, use the [`fdc3.nothing`](../context/ref/Nothing) context type. This type exists so that applications can explicitly declare that they support raising an intent without a context (when registering an `IntentHandler` or in an App Directory).
+To raise an intent without a context, use the [`fdc3.nothing`](../context/ref/Nothing) context type. This type exists so that applications can explicitly declare that they support raising an intent without a context (when registering an `IntentHandler` or in an App Directory). This type is also used when the context is cleared for the channel. If the optional context type is provided when performing [`clearContext`](ref/Channel.md#clearcontext), that type will be recorded in the field `subType` of [`fdc3.nothing`](../context/ref/Nothing) context type.
 
 As an alternative to raising a specific intent, you may also raise an unspecified intent with a known context allowing the Desktop Agent or the user (if the intent is ambiguous) to select the appropriate intent and then to raise it with the specified context for resolution.
 
@@ -535,6 +548,8 @@ When an instance of an application is launched, it is expected to add an [`Inten
 
 Intent handlers SHOULD be registered via [`fdc3.addIntentListener`](ref/DesktopAgent#addintentlistener) within 15 seconds of the application launch (the minimum timeout Desktop Agents are required to provide) in order to be widely compatible with Desktop Agent implementations. Individual Desktop Agent implementations MAY support longer timeouts or configuration to control or extend timeouts.
 
+A single handler can be added for each specific intent. If the application attempts to call [`fdc3.addIntentListener`](ref/DesktopAgent#addintentlistener) passing the same `intent` a second time, before unsubscribing to the previously added listener, the Desktop Agent MUST reject it with an `Error` Object with the message given by [`ResolveError.IntentListenerConflict`](ref/Errors#resolveerror).
+
 ### Originating App Metadata
 
 Optional metadata about each intent & context message received, including the app that originated the message, SHOULD be provided by the desktop agent implementation to registered intent handlers. As this metadata is optional, apps making use of it MUST handle cases where it is not provided.
@@ -595,7 +610,7 @@ Apps can join *User channels*.  An app can only be joined to one User channel at
 
 When an app is joined to a User channel, calls to [`fdc3.broadcast`](ref/DesktopAgent#broadcast) will be routed to that channel and listeners added through [`fdc3.addContextListener`](ref/DesktopAgent#addcontextlistener) will receive context broadcasts from other apps also joined to that channel. If an app is not joined to a User channel [`fdc3.broadcast`](ref/DesktopAgent#broadcast) will be a no-op and handler functions added with  [`fdc3.addContextListener`](ref/DesktopAgent#addcontextlistener) will not receive any broadcasts. However, apps can still choose to listen and broadcast to specific channels (both User and App channels) via the methods on the [`Channel`](ref/Channel) class.
 
-When an app joins a User channel, or adds a context listener when already joined to a channel, it will automatically receive the current context for that channel.
+When an app joins a User channel, or adds a context listener when already joined to a channel, it will automatically receive the current context for that channel, unless the context was cleared through [`clearContext`](ref/Channel.md#clearcontext).
 
 It is possible that a call to join a User channel could be rejected.  If for example, the desktop agent wanted to implement controls around what data apps can access.
 
@@ -839,6 +854,9 @@ The `PrivateChannel` type also supports synchronization of data transmitted over
 The [Context specification](../context/spec#assumptions) recommends that complex context objects are defined using simpler context types for particular fields. For example, a `Position` is composed of an `Instrument` and a holding amount. This leads to situations where an application may be able to receive or respond to context objects that are embedded in a more complex type, but not the more complex type itself. For example, a pricing chart might respond to an `Instrument` but doesn't know how to handle a `Position`.
 
 To facilitate context linking in such situations it is recommended that applications `broadcast` each context type that other apps (listening on a User Channel or App Channel) may wish to process, starting with the simpler types, followed by the complex type. Doing so allows applications to filter the context types they receive by adding listeners for specific context types - but requires that the application broadcasting context make multiple broadcast calls in quick succession when sharing its context.
+
+### Context clearing on channels
+Channel interface provides the ability to [`clearContext`](ref/Channel.md#clearcontext) on the channel, either for the specific context type, if provided, or for all contexts on that channel. Applications may listen to the `contextCleared` event on the channel. If a specific type was cleared, the `contextType` field of the event will be set with that type. Once cleared, any apps that join the channel, add new context listeners or call [`getCurrentContext`](ref/Channel.md#getcurrentcontext) will not return anything to the caller (other than the `fdc3.nothing` type indicating that context was cleared) until new context is broadcast to the channel. 
 
 ### Originating App Metadata
 

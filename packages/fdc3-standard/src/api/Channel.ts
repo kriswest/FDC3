@@ -7,6 +7,7 @@ import { Context } from '@finos/fdc3-context';
 import { ContextHandler } from './Types';
 import { DisplayMetadata } from './DisplayMetadata';
 import { Listener } from './Listener';
+import { EventHandler } from './Events';
 
 /**
  * Represents a context channel that applications can use to send and receive
@@ -70,8 +71,43 @@ export interface Channel {
    * If, when this function is called, the channel already contains context that would be passed to the listener it is NOT called or passed this context automatically (this behavior differs from that of the [`fdc3.addContextListener`](DesktopAgent#addcontextlistener) function). Apps wishing to access to the current context of the channel should instead call the `getCurrentContext(contextType)` function.
    *
    * Optional metadata about each context message received, including the app that originated the message, SHOULD be provided by the desktop agent implementation.
+   * 
+   * Adding multiple context listeners on the same or overlapping types (i.e. named type and null type) MUST be allowed, and MUST trigger all context handlers when a relevant context type is broadcast on the current channel.
+   *
    */
   addContextListener(contextType: string | null, handler: ContextHandler): Promise<Listener>;
+
+  /**
+   * Clears context from the channel, and triggers the event listener on the `contextCleared` event to notify existing listeners that the context was cleared. Listeners added to the channel and calls to [`getCurrentContext`](#getcurrentcontext) will not receive any existing context until new context is broadcast to the channel.
+   *
+   * If a `contextType` is provided, only contexts of that type will be cleared.
+   *
+   * If no `contextType` is provided, all contexts will be cleared.
+   */
+  clearContext(contextType?: string): Promise<void>;
+
+  /**
+   * Register a handler for events from the Channel. Whenever the handler function
+   * is called it will be passed an event object with details related to the event.
+   *
+   * ```js
+   * // any event type
+   * const listener = await myChannel.addEventListener(null, event => {
+   *   console.log(`Received event ${event.type}\n\tDetails: ${event.details}`);
+   * });
+   *
+   * // listener for a specific event type
+   * const contextClearedListener = await myChannel.addEventListener(
+   *    "contextCleared",
+   *    event => { ... }
+   * );
+   * ```
+   *
+   * @param {string | null} type If non-null, only events of the specified type will be received by the handler.
+   * @param {EventHandler} handler A function that events received will be passed to.
+   *
+   */
+  addEventListener(type: string | null, handler: EventHandler): Promise<Listener>;
 
   /**
    * @deprecated use `addContextListener(null, handler)` instead of `addContextListener(handler)`.

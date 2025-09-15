@@ -114,9 +114,9 @@ export interface ErrorResponseMessagePayload {
  * Constants representing the errors that can be encountered when calling the `open` method
  * on the DesktopAgent object (`fdc3`).
  *
- * Constants representing the errors that can be encountered when calling the `findIntent`,
- * `findIntentsByContext`, `raiseIntent` or `raiseIntentForContext` methods on the
- * DesktopAgent (`fdc3`).
+ * Constants representing the errors that can be encountered when calling the
+ * `addIntentListener`, `findIntent`, `findIntentsByContext`, `raiseIntent` or
+ * `raiseIntentForContext` methods on the DesktopAgent (`fdc3`).
  */
 export type ResponseErrorDetail =
   | 'AccessDenied'
@@ -124,6 +124,7 @@ export type ResponseErrorDetail =
   | 'MalformedContext'
   | 'NoChannelFound'
   | 'ApiTimeout'
+  | 'InvalidArguments'
   | 'AppNotFound'
   | 'AppTimeout'
   | 'DesktopAgentNotFound'
@@ -135,6 +136,7 @@ export type ResponseErrorDetail =
   | 'TargetAppUnavailable'
   | 'TargetInstanceUnavailable'
   | 'UserCancelledResolution'
+  | 'IntentListenerConflict'
   | 'IntentHandlerRejected'
   | 'NoResultReturned'
   | 'AgentDisconnected'
@@ -1133,9 +1135,9 @@ export interface PayloadClass {
  *
  * Should be set if the raiseIntent request returned an error.
  *
- * Constants representing the errors that can be encountered when calling the `findIntent`,
- * `findIntentsByContext`, `raiseIntent` or `raiseIntentForContext` methods on the
- * DesktopAgent (`fdc3`).
+ * Constants representing the errors that can be encountered when calling the
+ * `addIntentListener`, `findIntent`, `findIntentsByContext`, `raiseIntent` or
+ * `raiseIntentForContext` methods on the DesktopAgent (`fdc3`).
  *
  * Array of error message strings for responses that were not returned to the bridge before
  * the timeout or because an error occurred. Should be the same length as the `errorSources`
@@ -1155,6 +1157,8 @@ export type FindInstancesErrors =
   | 'TargetInstanceUnavailable'
   | 'UserCancelledResolution'
   | 'ApiTimeout'
+  | 'InvalidArguments'
+  | 'IntentListenerConflict'
   | 'AgentDisconnected'
   | 'NotConnectedToBridge'
   | 'ResponseToBridgeTimedOut'
@@ -2570,9 +2574,9 @@ export interface OpenAgentErrorResponsePayload {
  * the timeout or because an error occurred. Should be the same length as the `errorSources`
  * array and ordered the same. May be omitted if all sources responded without errors.
  *
- * Constants representing the errors that can be encountered when calling the `findIntent`,
- * `findIntentsByContext`, `raiseIntent` or `raiseIntentForContext` methods on the
- * DesktopAgent (`fdc3`).
+ * Constants representing the errors that can be encountered when calling the
+ * `addIntentListener`, `findIntent`, `findIntentsByContext`, `raiseIntent` or
+ * `raiseIntentForContext` methods on the DesktopAgent (`fdc3`).
  */
 export type OpenErrorResponsePayload =
   | 'AppNotFound'
@@ -2582,6 +2586,7 @@ export type OpenErrorResponsePayload =
   | 'MalformedContext'
   | 'ResolverUnavailable'
   | 'ApiTimeout'
+  | 'InvalidArguments'
   | 'AgentDisconnected'
   | 'NotConnectedToBridge'
   | 'ResponseToBridgeTimedOut'
@@ -4028,9 +4033,9 @@ export interface RaiseIntentResultAgentErrorResponsePayload {
  * Constants representing the errors that can be encountered when calling the `open` method
  * on the DesktopAgent object (`fdc3`).
  *
- * Constants representing the errors that can be encountered when calling the `findIntent`,
- * `findIntentsByContext`, `raiseIntent` or `raiseIntentForContext` methods on the
- * DesktopAgent (`fdc3`).
+ * Constants representing the errors that can be encountered when calling the
+ * `addIntentListener`, `findIntent`, `findIntentsByContext`, `raiseIntent` or
+ * `raiseIntentForContext` methods on the DesktopAgent (`fdc3`).
  */
 export type RaiseIntentResultErrorMessage =
   | 'IntentHandlerRejected'
@@ -6486,6 +6491,8 @@ const typeMap: any = {
     'ErrorOnLaunch',
     'IntentDeliveryFailed',
     'IntentHandlerRejected',
+    'IntentListenerConflict',
+    'InvalidArguments',
     'MalformedContext',
     'MalformedMessage',
     'NoAppsFound',
@@ -6534,6 +6541,8 @@ const typeMap: any = {
     'AgentDisconnected',
     'DesktopAgentNotFound',
     'IntentDeliveryFailed',
+    'IntentListenerConflict',
+    'InvalidArguments',
     'MalformedContext',
     'MalformedMessage',
     'NoAppsFound',
@@ -6560,6 +6569,7 @@ const typeMap: any = {
     'AppTimeout',
     'DesktopAgentNotFound',
     'ErrorOnLaunch',
+    'InvalidArguments',
     'MalformedContext',
     'MalformedMessage',
     'NotConnectedToBridge',
