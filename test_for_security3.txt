@@ -1,0 +1,3 @@
+Hi Security - this is a test to see if the rules added to the dev proxy are able to block uploads to github. If you see this, we failed.
+
+Cheers Kris (OSPO)
